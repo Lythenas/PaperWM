@@ -1,3 +1,4 @@
+import type Adw from '@girs/adw-1';
 import Gdk from 'gi://Gdk';
 import Gio from 'gi://Gio';
 import GLib from 'gi://GLib';
@@ -15,16 +16,16 @@ import * as WinpropsPane from './winpropsPane.js';
 const _ = s => s;
 
 export default class PaperWMPrefs extends ExtensionPreferences {
-    fillPreferencesWindow(window) {
+    fillPreferencesWindow(window: Adw.PreferencesWindow) {
         const provider = new Gtk.CssProvider();
         provider.load_from_path(`${this.path}/resources/prefs.css`);
         Gtk.StyleContext.add_provider_for_display(
-            Gdk.Display.get_default(),
+            Gdk.Display.get_default()!!,
             provider,
             Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         );
 
-        let selectedWorkspace = null;
+        let selectedWorkspace: number | null = null;
         try {
             const tempFile = Gio.File.new_for_path(GLib.get_tmp_dir()).get_child('paperwm.workspace');
             let [, contents] = tempFile.load_contents(null);
@@ -48,36 +49,45 @@ export default class PaperWMPrefs extends ExtensionPreferences {
 }
 
 class SettingsWidget {
+    extension: PaperWMPrefs;
+    _settings: Gio.Settings;
+    workspaceSettings: WorkspaceSettings;
+    builder: Gtk.Builder;
+    window: Adw.PreferencesWindow;
+    aboutButton: Gtk.MenuButton;
+    _backgroundFilter: Gtk.FileFilter;
+    _updatingName: boolean = false;
+
     /**
        selectedWorkspace: index of initially selected workspace in workspace settings tab
        selectedTab: index of initially shown tab
      */
-    constructor(extension, prefsWindow, selectedPage = 0, selectedWorkspace = 0) {
+    constructor(extension: PaperWMPrefs, prefsWindow: Adw.PreferencesWindow, selectedPage = 0, selectedWorkspace = 0) {
         this.extension = extension;
-        this._settings = extension.getSettings();
+        this._settings = this.extension.getSettings();
         this.workspaceSettings = new WorkspaceSettings(extension);
-        const wmSettings = new Gio.Settings({ schema_id: 'org.gnome.desktop.wm.preferences' });
+        const wmSettings = new Gio.Settings({ schemaId: 'org.gnome.desktop.wm.preferences' });
         this.builder = Gtk.Builder.new_from_file(`${extension.path}/Settings.ui`);
         this.window = prefsWindow;
 
         const pages = [
-            this.builder.get_object('general_page'),
-            this.builder.get_object('workspaces_page'),
-            this.builder.get_object('keybindings_page'),
-            this.builder.get_object('winprops_page'),
-            this.builder.get_object('advanced_page'),
+            this.builder.get_object('general_page') as Adw.PreferencesPage,
+            this.builder.get_object('workspaces_page') as Adw.PreferencesPage,
+            this.builder.get_object('keybindings_page') as Adw.PreferencesPage,
+            this.builder.get_object('winprops_page') as Adw.PreferencesPage,
+            this.builder.get_object('advanced_page') as Adw.PreferencesPage,
         ];
 
         pages.forEach(page => prefsWindow.add(page));
         prefsWindow.set_visible_page(pages[selectedPage]);
 
-        this.aboutButton = this.builder.get_object('about_button');
+        this.aboutButton = this.builder.get_object('about_button') as Gtk.MenuButton;
         this._backgroundFilter = new Gtk.FileFilter();
         this._backgroundFilter.add_pixbuf_formats();
 
         // value-changed methods
         const booleanStateChanged = (key, inverted = false) => {
-            const builder = this.builder.get_object(key);
+            const builder = this.builder.get_object(key) as Gtk.Switch;
             builder.active = inverted
                 ? !this._settings.get_boolean(key) : this._settings.get_boolean(key);
             builder.connect('state-set', (obj, state) => {
@@ -86,7 +96,7 @@ class SettingsWidget {
         };
 
         const intValueChanged = (builderKey, settingKey) => {
-            const builder = this.builder.get_object(builderKey);
+            const builder = this.builder.get_object(builderKey) as Gtk.SpinButton;
             const value = this._settings.get_int(settingKey);
             builder.set_value(value);
             builder.connect('value-changed', () => {
@@ -95,7 +105,7 @@ class SettingsWidget {
         };
 
         const doubleValueChanged = (builderKey, settingKey) => {
-            const builder = this.builder.get_object(builderKey);
+            const builder = this.builder.get_object(builderKey) as Gtk.SpinButton;
             const value = this._settings.get_double(settingKey);
             builder.set_value(value);
             builder.connect('value-changed', () => {
@@ -104,7 +114,7 @@ class SettingsWidget {
         };
 
         const percentValueChanged = (builderKey, settingKey) => {
-            const builder = this.builder.get_object(builderKey);
+            const builder = this.builder.get_object(builderKey) as Gtk.SpinButton;
             const value = this._settings.get_double(settingKey);
             builder.set_value(value * 100.0);
             builder.connect('value-changed', () => {
@@ -113,7 +123,7 @@ class SettingsWidget {
         };
 
         const enumOptionsChanged = (settingKey, optionNumberEnum, defaultOption, defaultNumber) => {
-            const builder = this.builder.get_object(settingKey);
+            const builder = this.builder.get_object(settingKey) as Gtk.ComboBoxText;
             const setting = this._settings.get_int(settingKey);
             const numberOptionEnum = Object.fromEntries(
                 Object.entries(optionNumberEnum).map(a => a.reverse())
@@ -126,24 +136,24 @@ class SettingsWidget {
             });
         };
 
-        const gestureFingersChanged = key => {
-            const builder = this.builder.get_object(key);
-            const setting = this._settings.get_int(key);
-            const valueToFingers = {
-                0: 'fingers-disabled',
-                3: 'three-fingers',
-                4: 'four-fingers',
-            };
-            const fingersToValue = Object.fromEntries(
-                Object.entries(valueToFingers).map(a => a.reverse())
-            );
+        // const gestureFingersChanged = key => {
+        //     const builder = this.builder.get_object(key);
+        //     const setting = this._settings.get_int(key);
+        //     const valueToFingers = {
+        //         0: 'fingers-disabled',
+        //         3: 'three-fingers',
+        //         4: 'four-fingers',
+        //     };
+        //     const fingersToValue = Object.fromEntries(
+        //         Object.entries(valueToFingers).map(a => a.reverse())
+        //     );
 
-            builder.set_active_id(valueToFingers[setting] ?? 'fingers-disable');
-            builder.connect('changed', obj => {
-                const value = fingersToValue[obj.get_active_id()] ?? 0;
-                this._settings.set_int(key, value);
-            });
-        };
+        //     builder.set_active_id(valueToFingers[setting] ?? 'fingers-disable');
+        //     builder.connect('changed', obj => {
+        //         const value = fingersToValue[obj.get_active_id()] ?? 0;
+        //         this._settings.set_int(key, value);
+        //     });
+        // };
 
         // General
         intValueChanged('window_gap_spin', 'window-gap');
@@ -153,8 +163,8 @@ class SettingsWidget {
 
         // processing function for cycle values
         let cycleProcessor = (elementName, settingName, resetElementName) => {
-            let element = this.builder.get_object(elementName);
-            let steps = this._settings.get_value(settingName).deep_unpack();
+            let element = this.builder.get_object(elementName) as Gtk.Entry;
+            let steps = this._settings.get_value(settingName).deepUnpack<number[]>();
 
             // need to check if current values are ratio or pixel ==> assume if all <=1 is ratio
             let isRatio = steps.every(v => v <= 1);
@@ -203,7 +213,7 @@ class SettingsWidget {
 
                 this._settings.set_value(settingName, new GLib.Variant('ad', varr));
             });
-            this.builder.get_object(resetElementName).connect('clicked', () => {
+            (this.builder.get_object(resetElementName) as Gtk.Button).connect('clicked', () => {
                 // text value here should match the gshema value for cycle-width-steps
                 element.set_text('38.195%; 50%; 61.804%');
             });
@@ -211,9 +221,9 @@ class SettingsWidget {
         cycleProcessor('cycle_widths_entry', 'cycle-width-steps', 'cycle_widths_reset_button');
         cycleProcessor('cycle_heights_entry', 'cycle-height-steps', 'cycle_heights_reset_button');
 
-        let vSens = this.builder.get_object('vertical-sensitivity');
-        let hSens = this.builder.get_object('horizontal-sensitivity');
-        let [sx, sy] = this._settings.get_value('swipe-sensitivity').deep_unpack();
+        let vSens = this.builder.get_object('vertical-sensitivity') as Gtk.SpinButton;
+        let hSens = this.builder.get_object('horizontal-sensitivity') as Gtk.SpinButton;
+        let [sx, sy] = this._settings.get_value('swipe-sensitivity').deepUnpack<[number, number]>();
         hSens.set_value(sx);
         vSens.set_value(sy);
         let sensChanged = () => {
@@ -222,9 +232,9 @@ class SettingsWidget {
         vSens.connect('value-changed', sensChanged);
         hSens.connect('value-changed', sensChanged);
 
-        let vFric = this.builder.get_object('vertical-friction');
-        let hFric = this.builder.get_object('horizontal-friction');
-        let [fx, fy] = this._settings.get_value('swipe-friction').deep_unpack();
+        let vFric = this.builder.get_object('vertical-friction') as Gtk.SpinButton;
+        let hFric = this.builder.get_object('horizontal-friction') as Gtk.SpinButton;
+        let [fx, fy] = this._settings.get_value('swipe-friction').deepUnpack<[number, number]>();
         hFric.set_value(fx);
         vFric.set_value(fy);
         let fricChanged = () => {
@@ -238,39 +248,39 @@ class SettingsWidget {
         percentValueChanged('edge_scale_spin', 'edge-preview-scale');
         percentValueChanged('window_switcher_preview_scale_spin', 'window-switcher-preview-scale');
 
-        const openWindowPosition = this.builder.get_object('open-window-position');
+        const openWindowPosition = this.builder.get_object('open-window-position') as Gtk.ComboBoxText;
         const owpos = this._settings.get_int('open-window-position');
         switch (owpos) {
-        case Settings.OpenWindowPositions.LEFT:
-            openWindowPosition.set_active_id('left');
-            break;
-        case Settings.OpenWindowPositions.START:
-            openWindowPosition.set_active_id('start');
-            break;
-        case Settings.OpenWindowPositions.END:
-            openWindowPosition.set_active_id('end');
-            break;
-        default:
-            openWindowPosition.set_active_id('right');
+            case Settings.OpenWindowPositions.LEFT:
+                openWindowPosition.set_active_id('left');
+                break;
+            case Settings.OpenWindowPositions.START:
+                openWindowPosition.set_active_id('start');
+                break;
+            case Settings.OpenWindowPositions.END:
+                openWindowPosition.set_active_id('end');
+                break;
+            default:
+                openWindowPosition.set_active_id('right');
         }
 
         openWindowPosition.connect('changed', obj => {
             switch (obj.get_active_id()) {
-            case 'left':
-                this._settings.set_int('open-window-position', Settings.OpenWindowPositions.LEFT);
-                break;
-            case 'start':
-                this._settings.set_int('open-window-position', Settings.OpenWindowPositions.START);
-                break;
-            case 'end':
-                this._settings.set_int('open-window-position', Settings.OpenWindowPositions.END);
-                break;
-            default:
-                this._settings.set_int('open-window-position', Settings.OpenWindowPositions.RIGHT);
+                case 'left':
+                    this._settings.set_int('open-window-position', Settings.OpenWindowPositions.LEFT);
+                    break;
+                case 'start':
+                    this._settings.set_int('open-window-position', Settings.OpenWindowPositions.START);
+                    break;
+                case 'end':
+                    this._settings.set_int('open-window-position', Settings.OpenWindowPositions.END);
+                    break;
+                default:
+                    this._settings.set_int('open-window-position', Settings.OpenWindowPositions.RIGHT);
             }
         });
 
-        const scratchOverview = this.builder.get_object('scratch-in-overview');
+        const scratchOverview = this.builder.get_object('scratch-in-overview') as Gtk.ComboBoxText;
         if (this._settings.get_boolean('only-scratch-in-overview'))
             scratchOverview.set_active_id('only');
         else if (this._settings.get_boolean('disable-scratch-in-overview'))
@@ -293,7 +303,7 @@ class SettingsWidget {
 
         booleanStateChanged('show-window-position-bar');
 
-        const enableGnomePill = this.builder.get_object('use-gnome-pill');
+        const enableGnomePill = this.builder.get_object('use-gnome-pill') as Gtk.Switch;
         enableGnomePill.active = !this._settings.get_boolean('show-workspace-indicator');
         enableGnomePill.connect('state-set', (obj, state) => {
             this._settings.set_boolean('show-workspace-indicator', !state);
@@ -302,7 +312,7 @@ class SettingsWidget {
         // Workspaces
         booleanStateChanged('use-default-background');
 
-        const backgroundPanelButton = this.builder.get_object('gnome-background-panel');
+        const backgroundPanelButton = this.builder.get_object('gnome-background-panel') as Gtk.Button;
         backgroundPanelButton.connect('clicked', () => {
             GLib.spawn_async(null, ['gnome-control-center', 'background'],
                 GLib.get_environ(),
@@ -310,8 +320,8 @@ class SettingsWidget {
                 null);
         });
 
-        const workspaceCombo = this.builder.get_object('workspace_combo_text');
-        const workspaceStack = this.builder.get_object('workspace_stack');
+        const workspaceCombo = this.builder.get_object('workspace_combo_text') as Gtk.ComboBoxText;
+        const workspaceStack = this.builder.get_object('workspace_stack') as Gtk.Stack;
         const nWorkspaces = this.workspaceSettings.getWorkspaceList().get_strv('list').length;
 
         // Note: For some reason we can't set the visible child of the workspace
@@ -334,7 +344,7 @@ class SettingsWidget {
             workspaceCombo.append_text(name);
         }
 
-        this.builder.get_object('workspace_reset_button').connect('clicked', () => {
+        (this.builder.get_object('workspace_reset_button') as Gtk.Button).connect('clicked', () => {
             this._updatingName = true;
             wmSettings.set_strv('workspace-names', []);
 
@@ -349,8 +359,8 @@ class SettingsWidget {
             // update pages
             for (let j of wsIndicesSelectedFirst) {
                 let view = workspaceStack.get_child_by_name(j.toString());
-                let nameEntry = view.get_first_child().get_last_child();
-                nameEntry.set_text(name(settings(j), j));
+                let nameEntry = view?.get_first_child()?.get_last_child();
+                (nameEntry as any).set_text(name(settings(j), j));
             }
             this._updatingName = false;
 
@@ -368,14 +378,14 @@ class SettingsWidget {
         workspaceCombo.set_active(selectedWorkspace);
 
         // Keybindings
-        let keybindingsPane = this.builder.get_object('keybindings_pane');
+        let keybindingsPane = this.builder.get_object('keybindings_pane') as any; // typeof KeybindingsPane.KeybindingsPane;
         keybindingsPane.init(extension);
 
         // Winprops
-        let winprops = this._settings.get_value('winprops').deep_unpack()
+        let winprops = this._settings.get_value('winprops').deepUnpack<string[]>()
             .map(p => JSON.parse(p));
         // sort a little nicer
-        let valueFn = wp =>  {
+        let valueFn = wp => {
             if (wp.wm_class) {
                 return wp.wm_class;
             }
@@ -389,7 +399,7 @@ class SettingsWidget {
             let bb = valueFn(b).replaceAll(/[/]/g, '');
             return aa.localeCompare(bb);
         });
-        let winpropsPane = this.builder.get_object('winpropsPane');
+        let winpropsPane = this.builder.get_object('winpropsPane') as any; // typeof WinpropsPane.WinpropsPane;
         winpropsPane.addWinprops(winprops);
         winpropsPane.connect('changed', () => {
             // update gsettings with changes
@@ -438,13 +448,13 @@ class SettingsWidget {
         percentValueChanged('maximize-width-percent', 'maximize-width-percent');
 
         // About
-        let versionLabel = this.builder.get_object('extension_version');
+        let versionLabel = this.builder.get_object('extension_version') as Gtk.Label;
         let version = this.extension.metadata.version?.toString() ?? '?';
         versionLabel.set_text(version);
     }
 
     range(n) {
-        let r = [];
+        let r: number[] = [];
         for (let i = 0; i < n; i++)
             r.push(i);
         return r;
@@ -531,7 +541,7 @@ class SettingsWidget {
 
         nameEntry.set_text(this.getWorkspaceName(settings, index));
 
-        let workspace_combo = this.builder.get_object('workspace_combo_text');
+        let workspace_combo = this.builder.get_object('workspace_combo_text') as Gtk.ComboBoxText;
 
         nameEntry.connect('changed', () => {
             if (this._updatingName) {
@@ -554,7 +564,7 @@ class SettingsWidget {
             let color = colorButton.get_rgba().to_string();
             settings.set_string('color', color);
             settings.set_string('background', '');
-            background.unselect_all();
+            (background as any).unselect_all();
         });
 
         clearBackground.connect('clicked', () => {
@@ -630,7 +640,7 @@ class SettingsWidget {
             chooser.add_button('Cancel', Gtk.ResponseType.CANCEL);
             chooser.connect('response', (dialog, response) => {
                 if (response === Gtk.ResponseType.OK) {
-                    settings.set_string(key, chooser.get_file().get_path());
+                    settings.set_string(key, chooser.get_file()!!.get_path());
                 }
                 chooser.destroy();
             });

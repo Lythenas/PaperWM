@@ -57,8 +57,13 @@ import { Extension } from 'resource:///org/gnome/shell/extensions/extension.js';
         - Settings should be before Patches (for reverse order disable);
  */
 
+type ModuleType = {
+    enable: (paperWM: PaperWM) => void,
+    disable: () => void,
+} | {};
+
 export default class PaperWM extends Extension {
-    modules = [
+    modules: ModuleType[] = [
         Utils,
         Settings,
         Patches,
@@ -83,8 +88,8 @@ export default class PaperWM extends Extension {
         this.enableUserStylesheet();
 
         // run enable method (with extension argument on all modules)
-        this.modules.forEach((m: any) => {
-            if (m['enable']) {
+        this.modules.forEach(m => {
+            if ("enable" in m) {
                 m.enable(this);
             }
         });
@@ -93,8 +98,8 @@ export default class PaperWM extends Extension {
     disable() {
         console.log('#PaperWM disabled');
         this.prepareForDisable();
-        [...this.modules].reverse().forEach((m: any) => {
-            if (m['disable']) {
+        [...this.modules].reverse().forEach(m => {
+            if ("disable" in m) {
                 m.disable();
             }
         });
