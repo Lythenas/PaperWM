@@ -19,6 +19,20 @@ export class Minimap extends Array {
     constructor(space, monitor) {
         super();
         this.space = space;
+        // initial fade
+        space.getWindows()
+            .forEach(w => {
+                w.clone?.shade?.show();
+                if (w === space.selectedWindow) {
+                    return;
+                }
+
+                Easer.addEase(w.clone?.shade, {
+                    time: Settings.prefs.animation_time,
+                    opacity: Settings.prefs.minimap_shade_opacity,
+                });
+            });
+
         this.monitor = monitor;
         let actor = new St.Widget({
             name: 'minimap',
@@ -42,13 +56,13 @@ export class Minimap extends Array {
         let container = new St.Widget({ name: 'minimap-container' });
         this.container = container;
 
-        actor.add_actor(highlight);
-        actor.add_actor(label);
-        actor.add_actor(clip);
-        clip.add_actor(container);
+        actor.add_child(highlight);
+        actor.add_child(label);
+        actor.add_child(clip);
+        clip.add_child(container);
         clip.set_position(12 + Settings.prefs.window_gap, 12 + Math.round(1.5 * Settings.prefs.window_gap));
         highlight.y = clip.y - 10;
-        Main.uiGroup.add_actor(this.actor);
+        Main.uiGroup.add_child(this.actor);
         this.actor.opacity = 0;
         this.createClones();
 
@@ -143,8 +157,8 @@ export class Minimap extends Array {
         clone.meta_window = mw;
         container.clone = clone;
         container.meta_window = mw;
-        container.add_actor(clone);
-        this.container.add_actor(container);
+        container.add_child(clone);
+        this.container.add_child(container);
         return container;
     }
 
@@ -204,6 +218,21 @@ export class Minimap extends Array {
         if (!selected)
             return;
 
+        this.space.getWindows().forEach(w => {
+            const shade = w.clone.shade;
+            // if selected
+            if (w === selected.meta_window) {
+                shade.opacity = 0;
+                return;
+            }
+
+            // others
+            Easer.addEase(shade, {
+                time: Settings.prefs.animation_time,
+                opacity: Settings.prefs.minimap_shade_opacity,
+            });
+        });
+
         label.text = selected.meta_window.title;
 
         if (selected.x + selected.width + container.x > clip.width) {
@@ -244,6 +273,14 @@ export class Minimap extends Array {
     destroy() {
         if (this.destroyed)
             return;
+        this.space.getWindows()
+            .forEach(w => {
+                Easer.addEase(w.clone?.shade, {
+                    time: Settings.prefs.animation_time,
+                    opacity: 0,
+                    onComplete: () => w.clone?.shade.hide(),
+                });
+            });
         this.destroyed = true;
         this.signals.destroy();
         this.signals = null;
@@ -251,4 +288,4 @@ export class Minimap extends Array {
         this.actor.destroy();
         this.actor = null;
     }
-};
+}

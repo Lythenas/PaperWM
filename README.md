@@ -1,9 +1,5 @@
 # PaperWM #
 
-> ### ⚠️ PaperWM [`develop`](https://github.com/paperwm/PaperWM/tree/develop) and [`release`](https://github.com/paperwm/PaperWM/tree/release) branches are now on Gnome 45.
-> 
-> ### If you're using Gnome 42-44, please install via [extensions.gnome.org](https://extensions.gnome.org/extension/6099/paperwm/) OR use the [`gnome-44`](https://github.com/paperwm/PaperWM/tree/gnome-44) branch (see the [Installation](#installation) section for more information).
-
 [![project chat](https://img.shields.io/badge/PaperWM_Discussions-join_chat-brightgreen)](https://github.com/paperwm/PaperWM/discussions)
 
 PaperWM is a [Gnome Shell](https://wiki.gnome.org/Projects/GnomeShell) extension which provides scrollable tiling of windows and per monitor workspaces. It's inspired by paper notebooks and tiling window managers.
@@ -26,7 +22,7 @@ Have questions or comments?  Please ask on our [Github Discussions](https://gith
 
 Clone the repo and check out the branch supporting the Gnome Shell version you're running.
 
-- 45 (current Gnome Shell release): https://github.com/paperwm/PaperWM/tree/release
+- 45-46 (currently developed/supported): https://github.com/paperwm/PaperWM/tree/release
 - 42-44: https://github.com/paperwm/PaperWM/tree/gnome-44
 - 40-41: https://github.com/paperwm/PaperWM/tree/gnome-40
 - 3.28-3.38: https://github.com/paperwm/PaperWM/tree/gnome-3.38
@@ -406,6 +402,27 @@ These extensions are good complements to PaperWM:
 
 - [Switcher](https://github.com/daniellandau/switcher) - combined window switcher and launcher
 - [Dash to Dock](https://micheleg.github.io/dash-to-dock/) - a great dock
+
+## Incompatible extensions
+
+In most cases it should be enough to disable these extensions.
+
+- [DING (Desktop Icons NG)](https://gitlab.com/rastersoft/desktop-icons-ng) (shipped by default with Ubuntu) or similar extensions that add desktop icons. Creates invisible windows and does not properly show icons. See #784, #266
+- Fedoras builtin desktop watermark (shipped with Fedora) See #706
+- [Rounded Window Corners](https://github.com/yilozt/rounded-window-corners) or similar extensions that change the window shape. See #763, #431
+- [Space Bar](https://github.com/christopher-l/space-bar) or similar extensions that modify workspace names etc. See #720
+- [Dash to Panel](https://github.com/home-sweet-gnome/dash-to-panel) or similar panels. Works in some configurations and in some not. Is incompatible with PaperWMs window position bar. See #170, #199, #646, #382, #166, #258
+
+See issues tagged with the [extension-conflict](https://github.com/paperwm/PaperWM/issues?q=is%3Aissue+label%3Aextension-conflict+sort%3Aupdated-desc) label for current and closed issues related to extension conflicts.
+
+In general extensions that do one of the following are problematic when used together with PaperWM (although they might partially work):
+
+- Modify the desktop
+- Modify window "shapes" (e.g. rounded corners)
+- Modify workspaces
+- Modify touch gestures
+
+PaperWM will attempt to disable keybindings of some known extensions if they clash. E.g. the Ubuntu Tiling Assistant from Ubuntu 23.10.
 
 ## Prior work ##
 

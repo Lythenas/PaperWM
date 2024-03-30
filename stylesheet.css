@@ -32,6 +32,12 @@ NOTE: please update `./config/users.css` with any new styles added here.
     font-weight: 600;
 }
 
+.take-window-hint {
+    background-color: rgba(0, 0, 0, 0.8);
+    padding: 8px;
+    border-radius: 8px;
+}
+
 .workspace-icon-button {
     -st-icon-style: symbolic;
     border: none;
@@ -50,6 +56,11 @@ NOTE: please update `./config/users.css` with any new styles added here.
 
 .paperwm-minimap-selection {
     border-radius: 8px;
+}
+
+.paperwm-clone-shade {
+    background-color: rgba(0, 0, 0, 0.7);
+    border-radius: 7px 7px 0px 0px;
 }
 
 .paperwm-window-position-bar-backdrop {

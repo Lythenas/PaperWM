@@ -159,6 +159,13 @@ export function enable(extension) {
             spaces.forEach(s => {
                 s.setSpaceTopbarElementsVisible();
                 s.updateName();
+
+                /**
+                 * The below resolves https://github.com/paperwm/PaperWM/issues/758.
+                 */
+                const x = s.cloneContainer.x;
+                s.viewportMoveToX(0);
+                s.viewportMoveToX(x);
             });
         });
     };
@@ -272,7 +279,7 @@ export class Space extends Array {
         workspaceIndicator.connect('button-press-event', () => Main.overview.toggle());
         this.workspaceIndicator = workspaceIndicator;
         let workspaceLabel = new St.Label();
-        workspaceIndicator.add_actor(workspaceLabel);
+        workspaceIndicator.add_child(workspaceLabel);
         this.workspaceLabel = workspaceLabel;
         workspaceLabel.hide();
 
@@ -285,15 +292,15 @@ export class Space extends Array {
         clip.space = this;
         cloneContainer.space = this;
 
-        container.add_actor(clip);
-        clip.add_actor(actor);
-        actor.add_actor(workspaceIndicator);
+        container.add_child(clip);
+        clip.add_child(actor);
+        actor.add_child(workspaceIndicator);
         actor.add_child(this.focusModeIcon);
-        actor.add_actor(cloneClip);
-        cloneClip.add_actor(cloneContainer);
+        actor.add_child(cloneClip);
+        cloneClip.add_child(cloneContainer);
 
         this.border = new St.Widget({ name: "border" });
-        this.actor.add_actor(this.border);
+        this.actor.add_child(this.border);
         this.border.hide();
 
         let monitor = Main.layoutManager.primaryMonitor;
@@ -839,26 +846,49 @@ export class Space extends Array {
         }
 
         /*
-         * Fix (still needed is 44) for bug where move_frame sometimes triggers
+         * Fix (still needed in 45) for bug where move_frame sometimes triggers
          * another move back to its original position. Make sure tiled windows are
-         * always positioned correctly.
+         * always positioned correctly (synced with clone position).
          */
         this.signals.connect(metaWindow, 'position-changed', w => {
             if (inGrab)
                 return;
+
             let f = w.get_frame_rect();
             let clone = w.clone;
             let x = this.visibleX(w);
             let y = this.monitor.y + clone.targetY;
             x = Math.min(this.width - stack_margin, Math.max(stack_margin - f.width, x));
             x += this.monitor.x;
-            if (f.x !== x || f.y !== y) {
-                try {
-                    w.move_frame(true, x, y);
-                }
-                catch (ex) {
 
+            // check if mismatch tracking needed, otherwise leave
+            if (f.x === x && f.y === y) {
+                // delete any mismatch counter (e.g. from previous attempt)
+                delete w.pos_mismatch_count;
+                return;
+            }
+
+            // guard against recursively calling this method
+            // see https://github.com/paperwm/PaperWM/issues/769
+            if (w.pos_mismatch_count &&
+                w.pos_mismatch_count > 1) {
+                console.warn(`clone/window position-changed recursive call: ${w.title}`);
+                return;
+            }
+
+            // mismatch detected
+            // move frame to ensure window position matches clone
+            try {
+                if (!w.pos_mismatch_count) {
+                    w.pos_mismatch_count = 0;
                 }
+                else {
+                    w.pos_mismatch_count += 1;
+                }
+                w.move_frame(true, x, y);
+            }
+            catch (ex) {
+
             }
         });
 
@@ -908,10 +938,10 @@ export class Space extends Array {
         this.visible.splice(this.visible.indexOf(metaWindow), 1);
 
         let clone = metaWindow.clone;
-        this.cloneContainer.remove_actor(clone);
+        this.cloneContainer.remove_child(clone);
         // Don't destroy the selection highlight widget
         if (clone.first_child.name === 'selection')
-            clone.remove_actor(clone.first_child);
+            clone.remove_child(clone.first_child);
         let actor = metaWindow.get_compositor_private();
         if (actor)
             actor.remove_clip();
@@ -947,7 +977,7 @@ export class Space extends Array {
         if (i === -1)
             return false;
         this._floating.splice(i, 1);
-        this.actor.remove_actor(metaWindow.clone);
+        this.actor.remove_child(metaWindow.clone);
         return true;
     }
 
@@ -995,7 +1025,7 @@ export class Space extends Array {
         ensureViewport(this.selectedWindow, this, { force: true });
     }
 
-    switchLinear(dir) {
+    switchLinear(dir, loop) {
         let index = this.selectedIndex();
         let column = this[index];
         if (!column)
@@ -1003,6 +1033,13 @@ export class Space extends Array {
         let row = column.indexOf(this.selectedWindow);
         if (Lib.in_bounds(column, row + dir) === false) {
             index += dir;
+            if (loop) {
+                if (index >= this.length) {
+                    index = 0;
+                } else if (index < 0) {
+                    index = this.length - 1;
+                }
+            }
             if (dir === 1) {
                 if (index < this.length)
                     row = 0;
@@ -1017,11 +1054,11 @@ export class Space extends Array {
         return true;
     }
 
-    switchLeft() { this.switch(Meta.MotionDirection.LEFT); }
-    switchRight() { this.switch(Meta.MotionDirection.RIGHT); }
-    switchUp() { this.switch(Meta.MotionDirection.UP); }
-    switchDown() { this.switch(Meta.MotionDirection.DOWN); }
-    switch(direction) {
+    switchLeft(loop) { this.switch(Meta.MotionDirection.LEFT, loop); }
+    switchRight(loop) { this.switch(Meta.MotionDirection.RIGHT, loop); }
+    switchUp(loop) { this.switch(Meta.MotionDirection.UP, loop); }
+    switchDown(loop) { this.switch(Meta.MotionDirection.DOWN, loop); }
+    switch(direction, loop) {
         let space = this;
         let index = space.selectedIndex();
         if (index === -1) {
@@ -1037,8 +1074,15 @@ export class Space extends Array {
             index--;
             row = -1;
         }
-        if (index < 0 || index >= space.length)
+        if (loop) {
+            if (index < 0) {
+                index = space.length - 1;
+            } else if (index >= space.length) {
+                index = 0;
+            }
+        } else if (index < 0 || index >= space.length) {
             return;
+        }
 
         let column = space[index];
 
@@ -1055,8 +1099,93 @@ export class Space extends Array {
         case Meta.MotionDirection.DOWN:
             row++;
         }
-        if (row < 0 || row >= column.length)
+        if (loop) {
+            if (row < 0) {
+                row = column.length - 1;
+            } else if (row >= column.length) {
+                row = 0;
+            }
+        } else if (row < 0 || row >= column.length) {
             return;
+        }
+
+        let metaWindow = space.getWindow(index, row);
+        ensureViewport(metaWindow, space);
+    }
+
+    switchGlobalLeft() { this.switchGlobal(Meta.MotionDirection.LEFT); }
+    switchGlobalRight() { this.switchGlobal(Meta.MotionDirection.RIGHT); }
+    switchGlobalUp() { this.switchGlobal(Meta.MotionDirection.UP); }
+    switchGlobalDown() { this.switchGlobal(Meta.MotionDirection.DOWN); }
+    switchGlobal(direction) {
+        let space = this;
+        let index = space.selectedIndex();
+        if (index === -1) {
+            return;
+        }
+        let row = space[index].indexOf(space.selectedWindow);
+
+        switch (direction) {
+        case Meta.MotionDirection.RIGHT:
+            index++;
+            break;
+        case Meta.MotionDirection.LEFT:
+            index--;
+        }
+        if (index < 0 || index >= space.length) {
+            let monitor = focusMonitor();
+            let dir = index < 0
+                ? Meta.DisplayDirection.LEFT : Meta.DisplayDirection.RIGHT;
+            let i = display.get_monitor_neighbor_index(monitor.index, dir);
+            if (i === -1)
+                return;
+
+            let newMonitor = Main.layoutManager.monitors[i];
+            space = spaces.monitors.get(newMonitor);
+            if (dir === Meta.DisplayDirection.LEFT) {
+                index = space.length - 1;
+            } else {
+                index = 0;
+            }
+            if (space[index].length <= row)
+                row = space[index].length - 1;
+            space.activate(false, false);
+            Navigator.finishNavigation();
+            Navigator.getNavigator().showMinimap(space);
+        }
+
+        let column = space[index];
+        if (column.length <= row)
+            row = column.length - 1;
+
+        switch (direction) {
+        case Meta.MotionDirection.UP:
+            row--;
+            break;
+        case Meta.MotionDirection.DOWN:
+            row++;
+        }
+        if (row < 0 || row >= column.length) {
+            let monitor = focusMonitor();
+            let dir = row < 0
+                ? Meta.DisplayDirection.UP : Meta.DisplayDirection.DOWN;
+            let i = display.get_monitor_neighbor_index(monitor.index, dir);
+            if (i === -1)
+                return;
+
+            let newMonitor = Main.layoutManager.monitors[i];
+            space = spaces.monitors.get(newMonitor);
+            if (space.length <= index)
+                index = space.length - 1;
+            if (dir === Meta.DisplayDirection.UP) {
+                row = space[index].length - 1;
+            } else {
+                row = 0;
+            }
+            space.activate(false, false);
+            Navigator.finishNavigation();
+            Navigator.getNavigator().showMinimap(space);
+        }
 
         let metaWindow = space.getWindow(index, row);
         ensureViewport(metaWindow, space);
@@ -1305,8 +1434,10 @@ export class Space extends Array {
         this.updateName();
         this.updateShowTopBar();
         this.signals.connect(this.settings, 'changed::name', this.updateName.bind(this));
-        this.signals.connect(this.settings, 'changed::color',
-            this.updateColor.bind(this));
+        this.signals.connect(this.settings, 'changed::color', () => {
+            this.updateColor();
+            this.updateBackground();
+        });
         this.signals.connect(this.settings, 'changed::background',
             this.updateBackground.bind(this));
         this.signals.connect(gsettings, 'changed::default-show-top-bar',
@@ -1334,11 +1465,11 @@ export class Space extends Array {
         let showTopBar = this.getShowTopBarSetting();
 
         // remove window position bar actors
-        this.actor.remove_actor(this.windowPositionBarBackdrop);
-        this.actor.remove_actor(this.windowPositionBar);
+        this.actor.remove_child(this.windowPositionBarBackdrop);
+        this.actor.remove_child(this.windowPositionBar);
         if (showTopBar) {
-            this.actor.add_actor(this.windowPositionBarBackdrop);
-            this.actor.add_actor(this.windowPositionBar);
+            this.actor.add_child(this.windowPositionBarBackdrop);
+            this.actor.add_child(this.windowPositionBar);
         }
 
         this.updateShowTopBar();
@@ -1381,7 +1512,6 @@ export class Space extends Array {
 border: ${borderWidth}px ${this.color};
 border-radius: ${borderWidth}px;
 `);
-        this.metaBackground?.set_color(Clutter.color_from_string(color)[1]);
     }
 
     updateBackground() {
@@ -1410,6 +1540,11 @@ border-radius: ${borderWidth}px;
         this.background.content.set({
             background: this.metaBackground,
         });
+
+        // after creating new background apply this space's color
+        if (this.color) {
+            this.metaBackground.set_color(Clutter.color_from_string(this.color)[1]);
+        }
     }
 
     updateName() {
@@ -1657,8 +1792,13 @@ border-radius: ${borderWidth}px;
                 Navigator.finishNavigation();
             });
 
-        this.signals.connect(
-            this.background, 'scroll-event',
+        // ensure this space is active if touched
+        this.signals.connect(this.background, 'touch-event',
+            (actor, event) => {
+                this.activateWithFocus(this.selectedWindow, false, false);
+            });
+
+        this.signals.connect(this.background, 'scroll-event',
             (actor, event) => {
                 if (!inGrab && !Navigator.navigating)
                     return;
@@ -1674,11 +1814,11 @@ border-radius: ${borderWidth}px;
                 switch (dir) {
                 case Clutter.ScrollDirection.LEFT:
                 case Clutter.ScrollDirection.UP:
-                    this.switchLeft();
+                    this.switchLeft(false);
                     break;
                 case Clutter.ScrollDirection.RIGHT:
                 case Clutter.ScrollDirection.DOWN:
-                    this.switchRight();
+                    this.switchRight(false);
                     break;
                 }
             });
@@ -1698,8 +1838,8 @@ border-radius: ${borderWidth}px;
                 this.monitor = monitor;
             }
             this.createBackground();
-            this.updateBackground();
             this.updateColor();
+            this.updateBackground();
 
             // update width of windowPositonBarBackdrop (to match monitor)
             this.windowPositionBarBackdrop.width = monitor.width;
@@ -1840,7 +1980,10 @@ border-radius: ${borderWidth}px;
     }
 
     destroy() {
-        this.getWindows().forEach(w => removeHandlerFlags(w));
+        this.getWindows().forEach(w => {
+            removeHandlerFlags(w);
+            delete w.pos_mismatch_count;
+        });
         this.signals.destroy();
         this.signals = null;
         this.background.destroy();
@@ -1986,7 +2129,6 @@ export const Spaces = class Spaces extends Map {
         for (let monitor of monitors) {
             let overlay = new ClickOverlay(monitor, this.onlyOnPrimary);
             monitor.clickOverlay = overlay;
-            overlay.activate();
             this.clickOverlays.push(overlay);
         }
 
@@ -2008,10 +2150,9 @@ export const Spaces = class Spaces extends Map {
             });
 
             this.spaceContainer.show();
-            activeSpace.monitor.clickOverlay.deactivate();
             Topbar.refreshWorkspaceIndicator();
             this.setSpaceTopbarElementsVisible();
-            Stackoverlay.multimonitorDragDropSupport();
+            Stackoverlay.multimonitorSupport();
         };
 
         if (this.onlyOnPrimary) {
@@ -2339,14 +2480,6 @@ export const Spaces = class Spaces extends Map {
             // (i.e. when everything is at the final position)
             () => toSpace.layout(),
         );
-
-        toSpace.monitor?.clickOverlay.deactivate();
-
-        for (let monitor of Main.layoutManager.monitors) {
-            if (monitor === toSpace.monitor)
-                continue;
-            monitor.clickOverlay.activate();
-        }
 
         // Update panel to handle target workspace
         signals.disconnect(Main.panel, this.touchSignal);
@@ -2719,7 +2852,11 @@ export const Spaces = class Spaces extends Map {
 
         Topbar.updateWorkspaceIndicator(to.index);
         if (to.hasTopBar) {
-            Topbar.setNoBackgroundStyle();
+            if (Settings.prefs.show_window_position_bar) {
+                Topbar.setNoBackgroundStyle();
+            } else {
+                Topbar.setTransparentStyle();
+            }
         }
 
         this.selectedSpace = to;
@@ -3060,16 +3197,25 @@ export function registerWindow(metaWindow) {
         return false;
     }
 
-    let actor = metaWindow.get_compositor_private();
-    let cloneActor = new Clutter.Clone({ source: actor });
-    let clone = new Clutter.Actor();
+    const actor = metaWindow.get_compositor_private();
+    const cloneActor = new Clutter.Clone({ source: actor });
+    const clone = new Clutter.Actor();
+    clone.add_child(cloneActor);
 
-    clone.add_actor(cloneActor);
-    clone.targetX = 0;
-    clone.meta_window = metaWindow;
+    // create shade
+    const shade = new St.Widget({ style_class: 'paperwm-clone-shade' });
+    // default opacity
+    clone.add_child(shade);
+    Utils.actor_raise(shade);
+    shade.opacity = 0;
+    shade.hide();
 
     metaWindow.clone = clone;
     metaWindow.clone.cloneActor = cloneActor;
+    metaWindow.clone.shade = shade;
+
+    clone.targetX = 0;
+    clone.meta_window = metaWindow;
 
     signals.connect(metaWindow, "focus", (metaWindow, user_data) => {
         focus_handler(metaWindow, user_data);
@@ -3105,10 +3251,16 @@ export function allocateClone(metaWindow) {
     // with the frame.
     let clone = metaWindow.clone;
     let cloneActor = clone.cloneActor;
-    cloneActor.set_position(buffer.x - frame.x,
+    cloneActor.set_position(
+        buffer.x - frame.x,
         buffer.y - frame.y);
     cloneActor.set_size(buffer.width, buffer.height);
     clone.set_size(frame.width, frame.height);
+
+    // update shade sizing too, we want it a little bigger
+    const [width, height] = clone.get_size();
+    metaWindow.clone.shade.set_position(-1, -1);
+    metaWindow.clone.shade.set_size(width + 2, height + 2);
 
     if (metaWindow.clone.first_child.name === 'selection') {
         let selection = metaWindow.clone.first_child;
@@ -3219,7 +3371,13 @@ export function resizeHandler(metaWindow) {
     space.showSelection();
     x = metaWindow?._fullscreen_frame?.x ?? f.x;
     x -= space.monitor.x;
-    x = Math.max(x, Settings.prefs.horizontal_margin);
+
+    // for non-maximised windows, enforce horizontal margin in restore position
+    if (metaWindow.get_maximized() !== Meta.MaximizeFlags.BOTH &&
+        metaWindow.get_maximized() !== Meta.MaximizeFlags.Horizontal) {
+        x = Math.max(x, Settings.prefs.horizontal_margin);
+    }
+
 
     // if pwm fullscreen previously
     if (metaWindow._fullscreen_lock) {
@@ -3789,13 +3947,6 @@ export function updateSelection(space, metaWindow) {
     Utils.actor_reparent(space.selection, clone);
     clone.set_child_below_sibling(space.selection, cloneActor);
     allocateClone(metaWindow);
-
-    // ensure window is properly activated (if not activated)
-    if (space === spaces.activeSpace) {
-        if (metaWindow !== display.focus_window) {
-            Main.activateWindow(metaWindow);
-        }
-    }
 }
 
 /**
@@ -4399,6 +4550,18 @@ export function centerWindowHorizontally(metaWindow) {
 }
 
 /**
+ * Activates the window under the mouse cursor, if any.
+ */
+export function activateWindowUnderCursor(metaWindow, space) {
+    const [gx, gy] = global.get_pointer();
+    const [ok, x, y] = space.actor.transform_stage_point(gx, gy);
+    const mw = space?.getWindowAtPoint(x, y);
+    if (mw) {
+        ensureViewport(mw, space);
+    }
+}
+
+/**
  * Sets the focus mode for a space.
  * @param {FocusModes} mode
  * @param {Space} space
@@ -4664,7 +4827,6 @@ export function moveUpSpace(mw, space) {
 /**
    Detach the @metaWindow, storing it at the bottom right corner while
    navigating. When done, insert all the detached windows again.
-   Activates last taken window when navigator operation complete.
  */
 export function takeWindow(metaWindow, space, { navigator }) {
     space = space || spaces.selectedSpace;
@@ -4674,8 +4836,47 @@ export function takeWindow(metaWindow, space, { navigator }) {
         return;
 
     if (!navigator._moving) {
+        navigator.showTakeHint(true);
         navigator._moving = [];
+
+        // get the action dispatcher signal to connect to
+        Navigator.getActionDispatcher(Clutter.GrabState.KEYBOARD)
+            .addKeypressCallback((actor, event) => {
+                const keysym = event.get_key_symbol();
+                if (keysym === Clutter.KEY_space) {
+                    // remove the last window you got
+                    const pop = navigator._moving.pop();
+                    let selectedSpace = spaces.selectedSpace;
+                    if (pop) {
+                        pop.change_workspace(selectedSpace.workspace);
+                        insertWindow(pop, { existing: true });
+                        // make space selectedWindow (keeps index for next insert)
+                        selectedSpace.selectedWindow = pop;
+                        ensureViewport(pop);
+                    }
+                    // return true if this was actioned
+                    return true;
+                }
+
+                // quit / close all that have been taken
+                if (keysym === Clutter.KEY_q) {
+                    // close all taken windows
+                    navigator._moving.forEach(w => {
+                        insertWindow(w, { existing: true });
+                        w.delete(global.get_current_time());
+                    });
+
+                    navigator._moving = [];
+                    return true;
+                }
+
+                // return false if no action taken
+                return false;
+            });
+
+
         signals.connectOneShot(navigator, 'destroy', () => {
+            navigator.showTakeHint(false);
             let selectedSpace = spaces.selectedSpace;
             navigator._moving.forEach(w => {
                 w.change_workspace(selectedSpace.workspace);
@@ -4702,7 +4903,7 @@ export function takeWindow(metaWindow, space, { navigator }) {
 
     navigator._moving.push(metaWindow);
     let parent = backgroundGroup;
-    parent.add_actor(metaWindow.clone);
+    parent.add_child(metaWindow.clone);
     let lowest = navigator._moving[navigator._moving.length - 2];
     lowest && parent.set_child_below_sibling(metaWindow.clone, lowest.clone);
     let point = space.cloneContainer.apply_relative_transform_to_point(
@@ -4711,8 +4912,7 @@ export function takeWindow(metaWindow, space, { navigator }) {
             y: metaWindow.clone.y,
         }));
     metaWindow.clone.set_position(point.x, point.y);
-    let x = Math.round(space.monitor.x +
-        space.monitor.width -
+    let x = Math.round(space.monitor.x + space.monitor.width -
         (0.1 * space.monitor.width * (1 + navigator._moving.length)));
     let y = Math.round(space.monitor.y + space.monitor.height * 2 / 3) +
         20 * navigator._moving.length;

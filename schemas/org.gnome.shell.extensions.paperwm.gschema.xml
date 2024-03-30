@@ -18,6 +18,15 @@
       <summary>Switch to previously active window, backward order</summary>
     </key>
 
+    <key type="as" name="live-alt-tab-scratch">
+        <default><![CDATA[['<Alt><Ctrl>Tab']]]></default>
+      <summary>Switch to previously active scratch window</summary>
+    </key>
+    <key type="as" name="live-alt-tab-scratch-backward">
+        <default><![CDATA[['<Shift><Alt><Ctrl>Tab']]]></default>
+      <summary>Switch to previously active scratch window, backward order</summary>
+    </key>
+
     <key type="as" name="previous-workspace">
       <default><![CDATA[['<Super>Above_Tab']]]></default>
       <summary>Switch to previously active workspace</summary>
@@ -149,7 +158,6 @@
       <default><![CDATA[['<Super>comma']]]></default>
       <summary>Switch to the previous window</summary>
     </key>
-
     <key type="as" name="switch-right">
         <default><![CDATA[['<Super>Right']]]></default>
         <summary>Switch to the right window</summary>
@@ -160,11 +168,53 @@
     </key>
     <key type="as" name="switch-up">
         <default><![CDATA[['<Super>Up']]]></default>
-        <summary>Switch to the above window</summary>
+        <summary>Switch to the window above</summary>
     </key>
     <key type="as" name="switch-down">
         <default><![CDATA[['<Super>Down']]]></default>
-        <summary>Switch to the below window</summary>
+        <summary>Switch to the window below</summary>
+    </key>
+
+    <key type="as" name="switch-next-loop">
+      <default><![CDATA[['']]]></default>
+      <summary>Switch to the next window (with wrap-around)</summary>
+    </key>
+    <key type="as" name="switch-previous-loop">
+      <default><![CDATA[['']]]></default>
+      <summary>Switch to the previous window (with wrap-around)</summary>
+    </key>
+    <key type="as" name="switch-right-loop">
+        <default><![CDATA[['']]]></default>
+        <summary>Switch to the right window (with wrap-around)</summary>
+    </key>
+    <key type="as" name="switch-left-loop">
+        <default><![CDATA[['']]]></default>
+        <summary>Switch to the left window (with wrap-around)</summary>
+    </key>
+    <key type="as" name="switch-up-loop">
+        <default><![CDATA[['']]]></default>
+        <summary>Switch to the window above (with wrap-around)</summary>
+    </key>
+    <key type="as" name="switch-down-loop">
+        <default><![CDATA[['']]]></default>
+        <summary>Switch to the window below (with wrap-around)</summary>
+    </key>
+
+    <key type="as" name="switch-global-right">
+        <default><![CDATA[[]]]></default>
+        <summary>Switch to the right window (no monitor boundary)</summary>
+    </key>
+    <key type="as" name="switch-global-left">
+        <default><![CDATA[[]]]></default>
+        <summary>Switch to the left window (no monitor boundary)</summary>
+    </key>
+    <key type="as" name="switch-global-up">
+        <default><![CDATA[[]]]></default>
+        <summary>Switch to the above window (no monitor boundary)</summary>
+    </key>
+    <key type="as" name="switch-global-down">
+        <default><![CDATA[[]]]></default>
+        <summary>Switch to the below window (no monitor boundary)</summary>
     </key>
 
     <key type="as" name="switch-first">
@@ -257,6 +307,11 @@
       <summary>Toggle fullscreen</summary>
     </key>
 
+    <key type="as" name="activate-window-under-cursor">
+        <default><![CDATA[[]]]></default>
+        <summary>Activate the window under mouse cursor</summary>
+    </key>
+
     <key type="as" name="close-window">
       <default><![CDATA[['<Super>BackSpace']]]></default>
       <summary>Close the active window</summary>
@@ -344,6 +399,11 @@
     <key type="d" name="minimap-scale">
       <default>0.15</default>
       <summary>Scale of mini mini-map tiles compared to their actual window size.</summary>
+    </key>
+
+    <key type="i" name="minimap-shade-opacity">
+      <default>160</default>
+      <summary>Sets the opacity of the non-selected windows during minimap navigation.</summary>
     </key>
 
     <key type="d" name="edge-preview-scale">
@@ -447,6 +507,16 @@
     <key type="d" name="animation-time">
         <default>0.25</default>
         <summary>Duration of animations in seconds</summary>
+    </key>
+
+    <key type="d" name="overview-max-window-scale">
+        <default>0.95</default>
+        <summary>Sets the maximum window scale (compared to actual window size) of Gnome overview windows</summary>
+    </key>
+
+    <key type="i" name="overview-min-windows-per-row">
+        <default>5</default>
+        <summary>Sets the minimum number or windows per row before adding a new window row</summary>
     </key>
 
     <key type="i" name="overview-ensure-viewport-animation">

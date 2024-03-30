@@ -237,6 +237,8 @@ class SettingsWidget {
         percentValueChanged('minimap_scale_spin', 'minimap-scale');
         percentValueChanged('edge_scale_spin', 'edge-preview-scale');
         percentValueChanged('window_switcher_preview_scale_spin', 'window-switcher-preview-scale');
+        percentValueChanged('overview_max_window_scale_spin', 'overview-max-window-scale');
+        intValueChanged('minimap_shade_opacity_spin', 'minimap-shade-opacity');
 
         const openWindowPosition = this.builder.get_object('open-window-position');
         const owpos = this._settings.get_int('open-window-position');
@@ -431,6 +433,7 @@ class SettingsWidget {
             'translate',
             1);
 
+        intValueChanged('overview_min_windows_per_row_spin', 'overview-min-windows-per-row');
         booleanStateChanged('show-focus-mode-icon');
         booleanStateChanged('disable-topbar-styling', true);
         // disabled since opposite of gnome-pill
